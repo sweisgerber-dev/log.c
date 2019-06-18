@@ -28,18 +28,27 @@
 
 #include "log.h"
 
-static struct {
-  void *udata;
+typedef struct _logc_config_t {
+  void* udata;
   log_LockFn lock;
-  FILE *fp;
+  FILE* fp;
   int level;
   int quiet;
   int timestamp;
-} L;
+} logc_config_t;
+
+logc_config_t logc_config = {
+    .udata = NULL,
+    .lock = NULL,
+    .fp = NULL,
+    .level = LOG_TRACE,
+    .quiet = 0,
+    .timestamp = 1
+};
 
 static char* TIMESTAMP_FORMAT = "%H:%M:%S";
 static char* TIMESTAMP_FORMAT_LONG = "%Y-%m-%d %H:%M:%S";
-static char* TIMESTAMP_EMPTY = "0000-00-00 00:00:00\0";
+static char* TIMESTAMP_EMPTY = "\0";
 
 static const char *level_names[] = {
   "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"
@@ -53,50 +62,50 @@ static const char *level_colors[] = {
 
 
 static void lock(void)   {
-  if (L.lock) {
-    L.lock(L.udata, 1);
+  if (logc_config.lock) {
+    logc_config.lock(logc_config.udata, 1);
   }
 }
 
 
 static void unlock(void) {
-  if (L.lock) {
-    L.lock(L.udata, 0);
+  if (logc_config.lock) {
+    logc_config.lock(logc_config.udata, 0);
   }
 }
 
 
 void log_set_udata(void *udata) {
-  L.udata = udata;
+  logc_config.udata = udata;
 }
 
 
 void log_set_lock(log_LockFn fn) {
-  L.lock = fn;
+  logc_config.lock = fn;
 }
 
 
 void log_set_fp(FILE *fp) {
-  L.fp = fp;
+  logc_config.fp = fp;
 }
 
 
 void log_set_level(int level) {
-  L.level = level;
+  logc_config.level = level;
 }
 
 
 void log_set_quiet(int enable) {
-  L.quiet = enable ? 1 : 0;
+  logc_config.quiet = enable ? 1 : 0;
 }
 
 void log_set_timestamp(int enable) {
-  L.timestamp = enable ? 1 : 0;
+  logc_config.timestamp = enable ? 1 : 0;
 }
 
 
 void log_log(int level, const char *file, int line, const char *fmt, ...) {
-  if (level < L.level) {
+  if (level < logc_config.level) {
     return;
   }
 
@@ -105,16 +114,16 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
 
   time_t t = time(NULL);
   struct tm* lt = NULL;
-  if (L.timestamp) {
+  if (logc_config.timestamp) {
     lt = localtime(&t);
   }
 
   /* Log to stderr */
-  if (!L.quiet) {
+  if (!logc_config.quiet) {
     va_list args;
 
     char* timestamp = NULL;
-    if (L.timestamp) {
+    if (logc_config.timestamp) {
       char buf[16];
       /* Get current time */
       buf[strftime(buf, sizeof(buf), TIMESTAMP_FORMAT, lt)] = '\0';
@@ -143,22 +152,22 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   }
 
   /* Log to file */
-  if (L.fp) {
+  if (logc_config.fp) {
     va_list args;
     char buf[32];
     char* timestamp = NULL;
-    if (L.timestamp) {
+    if (logc_config.timestamp) {
       buf[strftime(buf, sizeof(buf), TIMESTAMP_FORMAT_LONG, lt)] = '\0';
       timestamp = buf;
     } else {
       timestamp = TIMESTAMP_EMPTY;
     }
-    fprintf(L.fp, "%s %-5s %s:%d: ", timestamp, level_names[level], file, line);
+    fprintf(logc_config.fp, "%s %-5s %s:%d: ", timestamp, level_names[level], file, line);
     va_start(args, fmt);
-    vfprintf(L.fp, fmt, args);
+    vfprintf(logc_config.fp, fmt, args);
     va_end(args);
-    fprintf(L.fp, "\n");
-    fflush(L.fp);
+    fprintf(logc_config.fp, "\n");
+    fflush(logc_config.fp);
   }
 
   /* Release lock */
